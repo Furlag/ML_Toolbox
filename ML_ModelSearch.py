@@ -28,10 +28,11 @@ import joblib
 def Model_Search_LightGBM_cv(X, y, model='binary', folds=5,
                              sklearn_metric=None, lightgbm_metric=None,
                              step_wise_start_at=0, final_learning_rate=0.01,
-                             use_optuna=False, n_trials=50, load_study_from=None, save_study_as=None,
+                             use_optuna=False, direction='minimize', n_trials=50,
+                             load_study_from=None, save_study_as=None,
                              n_jobs=4):
 
-    # If model type is specified by string
+    # model
     if isinstance(model, str):
         if model == 'binary':
             model = lightgbm.LGBMClassifier(objective='binary', metric='binary_logloss',
@@ -53,7 +54,14 @@ def Model_Search_LightGBM_cv(X, y, model='binary', folds=5,
         else:
             sys.exit('Error: Unkown model type.')
 
-    # Score Metrics
+    # folds
+    if isinstance(folds, int):
+        if isinstance(model, lightgbm.LGBMClassifier):
+            folds = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
+        else:
+            folds = KFold(n_splits=folds, shuffle=True, random_state=42)
+
+    # sklearn_metric
     if sklearn_metric is None:  # https://scikit-learn.org/stable/modules/model_evaluation.html
         if isinstance(model, lightgbm.LGBMClassifier):
             sklearn_metric = 'neg_log_loss'
@@ -64,15 +72,11 @@ def Model_Search_LightGBM_cv(X, y, model='binary', folds=5,
         else:
             sys.exit('Error: Sklearn score metric needs to be provided.')
 
+    # lightgbm_metric
     if lightgbm_metric is not None:  # https://lightgbm.readthedocs.io/en/latest/Parameters.html
         model.set_params(metric=lightgbm_metric)
 
-    # Folds
-    if isinstance(folds, int):
-        if isinstance(model, lightgbm.LGBMClassifier):
-            folds = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
-        else:
-            folds = KFold(n_splits=folds, shuffle=True, random_state=42)
+    # ------------------------------------------------------------------------------------------------
 
     # Set fixed params
     fixed_params = {
@@ -88,6 +92,8 @@ def Model_Search_LightGBM_cv(X, y, model='binary', folds=5,
     # Create dataset for .cv
     d_train = lightgbm.Dataset(X, label=y)
 
+    # ------------------------------------------------------------------------------------------------
+
     if use_optuna:
         print("Searching for a Lightgbm model with optuna \n")
 
@@ -96,23 +102,20 @@ def Model_Search_LightGBM_cv(X, y, model='binary', folds=5,
         if load_study_from is not None:
             study = joblib.load(load_study_from)
         else:
-            study = optuna.create_study(direction='minimize', pruner=optuna.pruners.SuccessiveHalvingPruner())
+            study = optuna.create_study(direction=direction, pruner=optuna.pruners.SuccessiveHalvingPruner())
 
         def objetive(trial):
 
             params.update({
-                "learning_rate": trial.suggest_loguniform("learning_rate", 0.008, 0.1),
-                "max_depth": trial.suggest_int("max_depth", 4, 12),
+                "learning_rate": trial.suggest_loguniform("learning_rate", 0.005, 0.1),
+                "max_depth": trial.suggest_int("max_depth", 4, 15),
                 "num_leaves": trial.suggest_int("num_leaves", 2, 1024),
-                "subsample": trial.suggest_uniform("subsample", 0, 1),
-                "colsample_bytree": trial.suggest_uniform("colsample_bytree", 0.5, 1),
                 "lambda_l1": trial.suggest_loguniform("lambda_l1", 1e-8, 1e4),
                 "lambda_l2": trial.suggest_loguniform("lambda_l2", 1e-8, 1e4),
                 "feature_fraction": trial.suggest_uniform("feature_fraction", 0.4, 1.0),
                 "bagging_fraction": trial.suggest_uniform("bagging_fraction", 0.4, 1.0),
                 "bagging_freq": trial.suggest_int("bagging_freq", 1, 7),
-                "min_data_in_leaf": trial.suggest_int("min_data_in_leaf", 1, 50),
-                "min_child_samples": trial.suggest_int("min_child_samples", 5, 100),
+                "min_data_in_leaf": trial.suggest_int("min_data_in_leaf", 1, 5000),
                 })
 
             cv_results = lightgbm.cv(params, d_train, num_boost_round=10000, early_stopping_rounds=50,
@@ -270,10 +273,11 @@ def Model_Search_LightGBM_cv(X, y, model='binary', folds=5,
 def Model_Search_XGboost_cv(X, y, model='binary', folds=5,
                             sklearn_metric=None, xgboost_metric=None,
                             step_wise_start_at=0, final_learning_rate=0.01,
-                            use_optuna=False, n_trials=50, load_study_from=None, save_study_as=None,
+                            use_optuna=False, direction='minimize', n_trials=25,
+                            load_study_from=None, save_study_as=None,
                             n_jobs=4):
 
-    # If model type is specified by string
+    # model
     if isinstance(model, str):
         if model == 'binary':
             model = xgboost.XGBClassifier(objective='binary:logistic', eval_metric='logloss',
@@ -295,7 +299,7 @@ def Model_Search_XGboost_cv(X, y, model='binary', folds=5,
         else:
             sys.exit('Error: Unkown model type.')
 
-    # Score Metrics
+    # sklearn_metric
     if sklearn_metric is None:  # https://scikit-learn.org/stable/modules/model_evaluation.html
         if isinstance(model, xgboost.XGBClassifier):
             sklearn_metric = 'neg_log_loss'
@@ -306,6 +310,7 @@ def Model_Search_XGboost_cv(X, y, model='binary', folds=5,
         else:
             sys.exit('Error: Sklearn score metric needs to be provided.')
 
+    # xgboost_metric
     if xgboost_metric is None:  # https://xgboost.readthedocs.io/en/latest/parameter.html
         if isinstance(model, xgboost.XGBClassifier):
             n_classes = len(np.unique(y))
@@ -320,12 +325,14 @@ def Model_Search_XGboost_cv(X, y, model='binary', folds=5,
         else:
             sys.exit('Error: Xgboost score metric needs to be provided.')
 
-    # Folds
+    # folds
     if isinstance(folds, int):
         if isinstance(model, xgboost.XGBClassifier):
             folds = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
         else:
             folds = KFold(n_splits=folds, shuffle=True, random_state=42)
+
+    # ------------------------------------------------------------------------------------------------
 
     # Set fixed params
     fixed_params = {
@@ -340,6 +347,8 @@ def Model_Search_XGboost_cv(X, y, model='binary', folds=5,
     # dataset for .cv
     d_train = xgboost.DMatrix(X, label=y)
 
+    # ------------------------------------------------------------------------------------------------
+
     if use_optuna:
         print("Searching for a Xgboost model with optuna \n")
 
@@ -348,14 +357,14 @@ def Model_Search_XGboost_cv(X, y, model='binary', folds=5,
         if load_study_from is not None:
             study = joblib.load(load_study_from)
         else:
-            study = optuna.create_study(direction='minimize', pruner=optuna.pruners.SuccessiveHalvingPruner())
+            study = optuna.create_study(direction=direction, pruner=optuna.pruners.SuccessiveHalvingPruner())
 
         def objetive(trial):
 
             params.update({
-                "learning_rate": trial.suggest_loguniform("learning_rate", 0.008, 0.1),
+                "learning_rate": trial.suggest_uniform("learning_rate", 0.005, 0.1),
                 "max_depth": trial.suggest_int("max_depth", 4, 12),
-                "min_child_weight": trial.suggest_int("min_child_weight", 1, 500),
+                "min_child_weight": trial.suggest_int("min_child_weight", 1, 50),
                 "gamma": trial.suggest_loguniform("gamma", 1e-4, 1e4),
                 "subsample": trial.suggest_loguniform("subsample", 0.4, 1),
                 "colsample_bytree": trial.suggest_loguniform("colsample_bytree", 0.4, 1),
@@ -533,13 +542,14 @@ def Model_Search_XGboost_cv(X, y, model='binary', folds=5,
     return model
 
 
-def Model_Search_Catboost_cv(X, y, model='binary', cat_features=None, folds=5,
+def Model_Search_Catboost_cv(X, y, cat_features=None, model='binary', folds=5,
                              sklearn_metric=None, catboost_metric=None,
                              step_wise_start_at=0, final_learning_rate=0.01,
-                             use_optuna=False, n_trials=20, load_study_from=None, save_study_as=None,
+                             use_optuna=False, direction='minimize', n_trials=20,
+                             load_study_from=None, save_study_as=None,
                              n_jobs=4):
 
-    # If model type is specified by string
+    # model
     if isinstance(model, str):
         if model == 'binary':
             model = catboost.CatBoostClassifier(loss_function='Logloss', thread_count=n_jobs)
@@ -550,7 +560,7 @@ def Model_Search_Catboost_cv(X, y, model='binary', cat_features=None, folds=5,
         else:
             sys.exit('Error: Unkown model type.')
 
-    # Score Metrics
+    # sklearn_metric
     if sklearn_metric is None:  # https://scikit-learn.org/stable/modules/model_evaluation.html
         if isinstance(model, catboost.CatBoostClassifier):
             sklearn_metric = 'neg_log_loss'
@@ -559,15 +569,18 @@ def Model_Search_Catboost_cv(X, y, model='binary', cat_features=None, folds=5,
         else:
             sys.exit('Error: Sklearn score metric needs to be provided.')
 
+    # catboost_metric
     if catboost_metric is not None:  # https://catboost.ai/docs/concepts/loss-functions.html
         model.set_params(loss_function=catboost_metric)
 
-    # Folds
+    # folds
     if isinstance(folds, int):
         if isinstance(model, lightgbm.LGBMClassifier):
             folds = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
         else:
             folds = KFold(n_splits=folds, shuffle=True, random_state=42)
+
+    # ------------------------------------------------------------------------------------------------
 
     # Set fixed params
     fixed_params = {
@@ -582,6 +595,8 @@ def Model_Search_Catboost_cv(X, y, model='binary', cat_features=None, folds=5,
     # Set dataset for .cv
     d_train = catboost.Pool(X, label=y, cat_features=cat_features)
 
+    # ------------------------------------------------------------------------------------------------
+
     if use_optuna:
         print("Searching for a Catboost model with optuna \n")
 
@@ -590,15 +605,15 @@ def Model_Search_Catboost_cv(X, y, model='binary', cat_features=None, folds=5,
         if load_study_from is not None:
             study = joblib.load(load_study_from)
         else:
-            study = optuna.create_study(direction='minimize', pruner=optuna.pruners.SuccessiveHalvingPruner())
+            study = optuna.create_study(direction=direction, pruner=optuna.pruners.SuccessiveHalvingPruner())
 
         def objetive(trial):
 
             params.update({
                 "boosting_type": trial.suggest_categorical("boosting_type", ['Ordered', 'Plain']),
-                "learning_rate": trial.suggest_loguniform("learning_rate", 0.008, 0.1),
+                "learning_rate": trial.suggest_loguniform("learning_rate", 0.005, 0.1),
                 "max_depth": trial.suggest_int("max_depth", 4, 12),
-                "l2_leaf_reg": trial.suggest_loguniform("l2_leaf_reg", 1e-4, 100),
+                "l2_leaf_reg": trial.suggest_loguniform("l2_leaf_reg", 1e-4, 1e4),
                 "border_count": trial.suggest_int('border_count', 1, 255),
                 "random_strength": trial.suggest_loguniform("random_strength", 1e-4, 1e4),
                 "bagging_temperature": trial.suggest_loguniform("bagging_temperature", 1e-4, 1e4),
