@@ -58,7 +58,7 @@ plt.style.use('default')
 #######################################################################################################################
 #  region --------------------------------- Data Analysis and visualizations ------------------------------------------
 
-def test_normality(serie):
+def test_normality(serie, visualize=True):
     '''
         Typical info needed to test normality on y
     '''
@@ -82,41 +82,42 @@ def test_normality(serie):
     # skewness and kurtosis
     print("Skewness:", serie.skew(), "/ Kurtosis:", serie.kurt())
 
-    try:
-        shell = get_ipython().__class__.__name__  # noqa
-        if shell == 'ZMQInteractiveShell':
-            # Jupyter notebook or qtconsole
-            style.use('fivethirtyeight')
+    if visualize:
+        try:
+            shell = get_ipython().__class__.__name__  # noqa
+            if shell == 'ZMQInteractiveShell':
+                # Jupyter notebook or qtconsole
+                style.use('fivethirtyeight')
 
-            # Creating a customized chart. and giving in figsize and everything
-            fig = plt.figure(constrained_layout=True, figsize=(8, 12))
-            # creating a grid of 3 cols and 3 rows
-            grid = gridspec.GridSpec(nrows=3, ncols=2, figure=fig)
+                # Creating a customized chart. and giving in figsize and everything
+                fig = plt.figure(constrained_layout=True, figsize=(8, 12))
+                # creating a grid of 3 cols and 3 rows
+                grid = gridspec.GridSpec(nrows=3, ncols=2, figure=fig)
 
-            ax1 = fig.add_subplot(grid[0, :2])
-            ax1.set_title('Johnson SU')
-            sns.distplot(serie, kde=False, fit=stats.johnsonsu, ax=ax1)
+                ax1 = fig.add_subplot(grid[0, :2])
+                ax1.set_title('Johnson SU')
+                sns.distplot(serie, kde=False, fit=stats.johnsonsu, ax=ax1)
 
-            ax2 = fig.add_subplot(grid[1, :2])
-            ax2.set_title('Normal')
-            sns.distplot(serie, kde=False, fit=stats.norm, ax=ax2)
+                ax2 = fig.add_subplot(grid[1, :2])
+                ax2.set_title('Normal')
+                sns.distplot(serie, kde=False, fit=stats.norm, ax=ax2)
 
-            ax3 = fig.add_subplot(grid[2, :2])
-            ax3.set_title('Log Normal')
-            sns.distplot(serie, kde=False, fit=stats.lognorm, ax=ax3)
+                ax3 = fig.add_subplot(grid[2, :2])
+                ax3.set_title('Log Normal')
+                sns.distplot(serie, kde=False, fit=stats.lognorm, ax=ax3)
 
-            fig.show()
+                fig.show()
 
-        elif shell == 'TerminalInteractiveShell':
-            # Terminal running IPython
+            elif shell == 'TerminalInteractiveShell':
+                # Terminal running IPython
+                None
+            else:
+                # Other type (?)
+                None
+
+        except NameError:
+            # Probably standard Python interpreter
             None
-        else:
-            # Other type (?)
-            None
-
-    except NameError:
-        # Probably standard Python interpreter
-        None
 
 
 def visualize_feature_info(serie):
@@ -240,7 +241,7 @@ def visualize_boxplot_Grid(df):
         shell = get_ipython().__class__.__name__  # noqa
         if shell == 'ZMQInteractiveShell':
             # Jupyter notebook or qtconsole
-            numerical_cols = [cname for cname in df.columns if df[cname].dtype in ['int64', 'float64']]
+            numerical_cols = X.select_dtypes(include=np.number).columns
             num_df = df[numerical_cols]
 
             width = 20
@@ -307,7 +308,7 @@ def show_missing_values_info(df):
 
 def show_top_multicollinearity(df, threshold=0.9, method='pearson', features=[], n=50):
 
-    numerical_cols = [cname for cname in df.columns if df[cname].dtype in ['int64', 'float64']]
+    numerical_cols = df.select_dtypes(include=np.number).columns
 
     # Get X correlations
     df_corr = df[numerical_cols].corr().abs()
@@ -336,8 +337,10 @@ def show_top_multicollinearity(df, threshold=0.9, method='pearson', features=[],
     return X_corr
 
 
-def show_feature_importance(X, y, model=RandomForestClassifier(random_state=42, n_jobs=4)):
-
+def show_feature_importance(
+    X, y, model=RandomForestClassifier(random_state=42, n_jobs=4),
+    save_as=None
+):
     try:
         feature_importances = pd.DataFrame({'Feature': X.columns, 'Importance': model.feature_importances_})
         feature_importances = feature_importances.sort_values('Importance', ascending=False)
@@ -366,6 +369,9 @@ def show_feature_importance(X, y, model=RandomForestClassifier(random_state=42, 
             plt.tight_layout()
             plt.show()
 
+            if save_as is not None:
+                plt.savefig(save_as)
+
         elif shell == 'TerminalInteractiveShell':
             # Terminal running IPython
             print(feature_importances)
@@ -378,15 +384,17 @@ def show_feature_importance(X, y, model=RandomForestClassifier(random_state=42, 
         print(feature_importances)
 
 
-def show_permutation_feature_importance(X, y, model=RandomForestClassifier(random_state=42, n_jobs=4)):
-
+def show_permutation_feature_importance(
+    X, y, model=RandomForestClassifier(random_state=42, n_jobs=4),
+    n_jobs=1, save_as=None
+):
     try:
         result = permutation_importance(model, X, y, n_repeats=10,
-                                        random_state=42, n_jobs=1)
+                                        random_state=42, n_jobs=n_jobs)
     except:  # noqa
         model.fit(X, y)
         result = permutation_importance(model, X, y, n_repeats=10,
-                                        random_state=42, n_jobs=1)
+                                        random_state=42, n_jobs=n_jobs)
 
     sorted_idx = result.importances_mean.argsort()
 
@@ -404,6 +412,9 @@ def show_permutation_feature_importance(X, y, model=RandomForestClassifier(rando
             fig.tight_layout()
             plt.show()
 
+            if save_as is not None:
+                plt.savefig(save_as)
+
         elif shell == 'TerminalInteractiveShell':
             # Terminal running IPython
             print(result)
@@ -417,7 +428,7 @@ def show_permutation_feature_importance(X, y, model=RandomForestClassifier(rando
 
 
 def kbest_analysis(X, y, score_func=f_classif):
-    skbest = SelectKBest(f_classif, k="all").fit(X, y)
+    skbest = SelectKBest(score_func, k="all").fit(X, y)
 
     info = pd.DataFrame(np.array([X.columns.values, skbest.scores_, skbest.pvalues_]).transpose(),
                         columns=['Feature', 'score', 'pvalue'])
@@ -451,9 +462,9 @@ class Apply_transformer_to_features(BaseEstimator, TransformerMixin):
         # Select features to imput
         if isinstance(self.features, str):
             if self.features == 'Numerical':
-                self.features = [cname for cname in X.columns if X[cname].dtype in ['int64', 'float64']]
+                self.features = X.select_dtypes(include=np.number).columns
             elif self.features == 'Categorical':
-                self.features = [cname for cname in X.columns if X[cname].dtype in ['category', 'object']]
+                self.features = X.select_dtypes(include="object").columns
             else:
                 sys.exit("Error: Feature type not valid.")
 
@@ -511,9 +522,9 @@ class Apply_Imputer(BaseEstimator, TransformerMixin):
         # Select features to imput
         if isinstance(self.features, str):
             if self.features == 'Numerical':
-                self.features = [cname for cname in X.columns if X[cname].dtype in ['int64', 'float64']]
+                self.features = X.select_dtypes(include=np.number).columns
             elif self.features == 'Categorical':
-                self.features = [cname for cname in X.columns if X[cname].dtype in ['category', 'object']]
+                self.features = X.select_dtypes(include="object").columns
             else:
                 sys.exit("Error: Feature type not valid.")
 
@@ -564,8 +575,6 @@ class Apply_Encoder(BaseEstimator, TransformerMixin):
                 X_copy = X_copy.drop(self.cat_features, axis=1)
                 X_copy[encoded_cat_X.columns] = encoded_cat_X
 
-                X_copy = self.set_dtypes_to_category(self, X_copy, self.cat_features)
-
             elif self.tecnique == 'OneHotEncoder':
                 new_feature_names = self.encoder.get_feature_names(self.cat_features)
                 encoded_cat_X = pd.DataFrame(data=self.encoder.transform(X_copy[self.cat_features]),
@@ -577,9 +586,6 @@ class Apply_Encoder(BaseEstimator, TransformerMixin):
 
             elif self.tecnique == 'OrdinalEncoder':
                 X_copy[self.cat_features] = self.encoder.transform(X_copy[self.cat_features].copy())
-
-                X_copy = self.set_dtypes_to_category(self, X_copy, self.cat_features)
-
             else:
                 sys.exit("Error: Need valid encoder. Valid types are 'dummie_OH', 'OH' and 'Label'.")
 
@@ -587,10 +593,10 @@ class Apply_Encoder(BaseEstimator, TransformerMixin):
 
     def fit(self, X, y=None):
         # Get numerical features
-        self.num_features = [cname for cname in X.columns if X[cname].dtype in ['int64', 'float64']]
+        self.num_features = X.select_dtypes(include=np.number).columns
 
         # Get categorical features
-        self.cat_features = [cname for cname in X.columns if X[cname].dtype in ['category', 'object']]
+        self.cat_features = X.select_dtypes(include="object").columns
 
         # Fit encoders:
         if len(self.cat_features) > 0:
@@ -614,10 +620,9 @@ class Apply_Encoder(BaseEstimator, TransformerMixin):
 
 
 class Apply_Scaler(BaseEstimator, TransformerMixin):
-    def __init__(self, tecnique='StandardScaler', features=[], skew_threshold=0.0):
+    def __init__(self, tecnique='MinMaxScaler', features=[]):
         self.tecnique = tecnique
         self.features = features
-        self.skew_threshold = skew_threshold
 
     def fit_transform(self, X, y=None):
         self.fit(X, y)
@@ -634,15 +639,7 @@ class Apply_Scaler(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         # Select numerical features if no features were selected
         if len(self.features) == 0:
-            self.features = [cname for cname in X.columns if X[cname].dtype in ['int32', 'float32',
-                                                                                'int64', 'float64']]
-
-        if self.skew_threshold > 0:
-            # Identify columns to which transformer will be applied
-            skewColumns = X[self.features].apply(lambda x: skew(x)).sort_values(ascending=False)
-            skewed_cols_info = skewColumns[abs(skewColumns) > self.skew_threshold]
-            self.features = list(skewed_cols_info.index)
-        # _________________________________________________________________________________________________
+            self.features = X.select_dtypes(include=np.number).columns
 
         # Initialize Scaler
         if self.tecnique == 'StandardScaler':
@@ -657,21 +654,10 @@ class Apply_Scaler(BaseEstimator, TransformerMixin):
         elif self.tecnique == 'MaxAbsScaler':
             self.scaler = MaxAbsScaler()
 
-        elif self.tecnique == 'yeo-johnson':
-            self.scaler = PowerTransformer(method='yeo-johnson')
-
-        elif self.tecnique == 'box-cox':
-            self.scaler = PowerTransformer(method='box-cox')
-
-        elif self.tecnique == 'QuantileTansformer':
-            self.scaler = QuantileTransformer(random_state=42)
-
         else:
             sys.exit('''Error: Need valid Scaler.
                      \nValid types are 'StandardScaler', 'RobustScaler',
-                     'MinMaxScaler', 'MaxAbsScaler'.
-                     \nAlso supported are non linear transformers
-                     'yeo-johnson', 'box-cox' and 'QuantileTansformer' . ''')
+                     'MinMaxScaler' and 'MaxAbsScaler'.''')
 
         # Fit Scaler
         self.scaler.fit(X[self.features])
@@ -679,7 +665,66 @@ class Apply_Scaler(BaseEstimator, TransformerMixin):
         return self
 
 
-class Create_unique_counts(BaseEstimator, TransformerMixin):
+class Apply_PowerTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, tecnique='yeo-johnson', features=[], skew_threshold=0.0):
+        self.tecnique = tecnique
+        self.features = features
+        self.skew_threshold = skew_threshold
+
+    def fit_transform(self, X, y=None):
+        self.fit(X, y)
+        return self.transform(X)
+
+    def transform(self, X):
+        X_copy = X.copy()
+
+        # Apply the transformer to columns
+        if self.tecnique == 'log1p':
+            X_copy[self.features] = np.log1p(X_copy[self.features])
+        elif self.tecnique == 'sqrt':
+            X_copy[self.features] = np.sqrt(X_copy[self.features])
+        else:
+            X_copy[self.features] = self.transformer.transform(X_copy[self.features])
+
+        return X_copy
+
+    def fit(self, X, y=None):
+        # Select numerical features if no features were selected
+        if len(self.features) == 0:
+            self.features = X.select_dtypes(include=np.number).columns
+
+        if self.skew_threshold > 0:
+            # Identify columns to which transformer will be applied
+            skewColumns = X[self.features].apply(lambda x: skew(x)).sort_values(ascending=False)
+            skewed_cols_info = skewColumns[abs(skewColumns) > self.skew_threshold]
+            self.features = list(skewed_cols_info.index)
+
+        # Initialize transformer
+        if self.tecnique == 'log1p':
+            pass
+        elif self.tecnique == 'sqrt':
+            pass
+        elif self.tecnique == 'yeo-johnson':
+            self.transformer = PowerTransformer(method='yeo-johnson')
+
+        elif self.tecnique == 'box-cox':
+            self.transformer = PowerTransformer(method='box-cox')
+
+        elif self.tecnique == 'QuantileTansformer':
+            self.transformer = QuantileTransformer(random_state=42)
+
+        else:
+            sys.exit('''Error: Need valid transformer.
+                     \nValid types are 'log1p', 'sqrt',
+                     'yeo-johnson', 'box-cox', 'QuantileTansformer'.''')
+
+        # Fit transformer
+        self.transformer.fit(X[self.features])
+
+        return self
+
+
+class Create_Categorical_Unique_Counts(BaseEstimator, TransformerMixin):
     '''
         Creates new features with unique count for selected features.
         If no features are given then all categorical features are selected automatically.
@@ -708,7 +753,7 @@ class Create_unique_counts(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         # Identify categorical columns if no columns were passed
         if len(self.features) == 0:
-            self.features = [cname for cname in X.columns if X[cname].dtype in ['category', 'object']]
+            self.features = X.select_dtypes(include="object").columns
 
         return self
 
@@ -720,11 +765,11 @@ def Create_PolynomialFeatures(X, degree=2):
     return pd.DataFrame(data=poly.transform(X), columns=poly.get_feature_names())
 
 
-def Fix_multicollinearity(X, y, threshold=0.9, method='pearson', features=[], verbose=True):
+def Fix_multicollinearity(X, y, threshold=0.95, method='pearson', features=[], verbose=True):
 
     if len(features) == 0:
         # Identify numerical features
-        features = [cname for cname in X.columns if X[cname].dtype in ['int64', 'float64']]
+        features = X.select_dtypes(include=np.number).columns
 
     # Get y correlations
     y_corr = abs(X[features].corrwith(y, method=method))
